@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Labirinto Mobile - Tela Cheia ao Vencer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Canvas Confetti Library -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS for mobile interactions and full-screen animations -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap');
+        
+        * {
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            font-family: 'Fredoka', sans-serif;
+            touch-action: manipulation;
+            overscroll-behavior: none;
+        }
+
+        /* D-Pad Button animations */
+        .dpad-btn {
+            transition: transform 0.08s ease, background-color 0.1s ease;
+        }
+        .dpad-btn:active {
+            transform: scale(0.88);
+        }
+
+        /* Fullscreen modal zoom animation */
+        @keyframes fullScreenZoom {
+            0% { opacity: 0; transform: scale(0.92); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        .animate-fullscreen-pop {
+            animation: fullScreenZoom 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-white min-h-screen flex flex-col justify-between items-center p-3 select-none overflow-hidden">
+
+    <!-- Header Section -->
+    <header class="w-full max-w-xs text-center mt-2">
+        <h1 class="text-2xl font-bold text-amber-400 flex items-center justify-center gap-2">
+            <i class="fa-solid fa-compass"></i> Labirinto Mobile
+        </h1>
+        <p class="text-xs text-slate-400 mt-1">Deslize a tela ou use as setas para guiar 🏃 até 🚩</p>
+    </header>
+
+    <!-- Maze Canvas Container -->
+    <main class="w-full max-w-xs flex flex-col items-center justify-center my-auto">
+        <div class="relative w-full aspect-square bg-slate-900 p-2.5 rounded-3xl border-4 border-slate-800 shadow-2xl flex items-center justify-center overflow-hidden" id="touch-area">
+            <canvas id="mazeCanvas" class="w-full h-full rounded-2xl block"></canvas>
+        </div>
+    </main>
+
+    <!-- Mobile D-Pad Control Footer -->
+    <footer class="w-full max-w-xs mb-3 flex flex-col items-center">
+        <div class="grid grid-cols-3 gap-2.5 w-48 h-48">
+            <div></div>
+            <button id="btn-up" aria-label="Mover para cima" class="dpad-btn bg-amber-500 active:bg-amber-600 text-slate-950 text-2xl font-bold rounded-2xl shadow-lg border-b-4 border-amber-700 flex items-center justify-center">
+                <i class="fa-solid fa-chevron-up"></i>
+            </button>
+            <div></div>
+
+            <button id="btn-left" aria-label="Mover para esquerda" class="dpad-btn bg-amber-500 active:bg-amber-600 text-slate-950 text-2xl font-bold rounded-2xl shadow-lg border-b-4 border-amber-700 flex items-center justify-center">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <div class="bg-slate-900 rounded-2xl flex items-center justify-center border-2 border-slate-800">
+                <i class="fa-solid fa-gamepad text-slate-700 text-xl"></i>
+            </div>
+            <button id="btn-right" aria-label="Mover para direita" class="dpad-btn bg-amber-500 active:bg-amber-600 text-slate-950 text-2xl font-bold rounded-2xl shadow-lg border-b-4 border-amber-700 flex items-center justify-center">
+                <i class="fa-solid fa-chevron-right"></i>
+            </button>
+
+            <div></div>
+            <button id="btn-down" aria-label="Mover para baixo" class="dpad-btn bg-amber-500 active:bg-amber-600 text-slate-950 text-2xl font-bold rounded-2xl shadow-lg border-b-4 border-amber-700 flex items-center justify-center">
+                <i class="fa-solid fa-chevron-down"></i>
+            </button>
+            <div></div>
+        </div>
+    </footer>
+
+    <!-- ================================================================= -->
+    <!-- 🏆 MODAL DE VITÓRIA EM TELA CHEIA (FULLSCREEN OVERLAY)             -->
+    <!-- ================================================================= -->
+    <div id="victory-modal" class="fixed inset-0 w-screen h-screen bg-black/95 backdrop-blur-md z-50 hidden flex-col justify-between items-center p-4 animate-fullscreen-pop">
+        
+        <!-- Top Bar Header over Fullscreen Image -->
+        <div class="w-full flex justify-between items-center z-10 pt-2 px-2">
+            <span class="bg-amber-400 text-slate-950 text-xs font-black px-4 py-1.5 rounded-full uppercase tracking-wider shadow-lg flex items-center gap-1.5">
+                <i class="fa-solid fa-trophy"></i> Vitória!
+            </span>
+            <button id="btn-close-modal" aria-label="Fechar" class="bg-slate-800/80 hover:bg-slate-700 text-white w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border border-slate-600 active:scale-95 transition">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Fullscreen Center Image Container -->
+        <div class="relative w-full flex-1 my-3 flex items-center justify-center overflow-hidden rounded-3xl border-2 border-amber-400/40 shadow-2xl bg-slate-900">
+            <!-- ==================================================================================== -->
+            <!-- 🖼️ IMPORTANTE: PARA MUDAR A IMAGEM, ALTERE O LINK ABAIXO DENTRO DA ATRIBUIÇÃO src="" -->
+            <!-- Exemplo local: src="./sua-imagem.jpg" ou link web: src="https://seu-site.com/imagem.png" -->
+            <!-- ==================================================================================== -->
+            <img 
+                id="victory-image" 
+                src="https://http2.mlstatic.com/D_NQ_NP_973954-MLA106785652186_022026-O.webp" 
+                alt="Imagem de Vitória em Tela Cheia" 
+                class="w-full h-full object-cover object-center"
+            />
+        </div>
+
+        <!-- Bottom Action Bar over Fullscreen Image -->
+        <div class="w-full max-w-sm z-10 pb-3 px-2 flex flex-col gap-2">
+            <button id="btn-restart" class="w-full py-4 bg-emerald-500 active:bg-emerald-600 text-slate-950 font-black rounded-2xl shadow-xl border-b-4 border-emerald-700 transition flex items-center justify-center gap-2 text-lg uppercase tracking-wide">
+                <i class="fa-solid fa-rotate-right text-xl"></i> Jogar Novamente
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const canvas = document.getElementById('mazeCanvas');
+        const ctx = canvas.getContext('2d');
+        const modal = document.getElementById('victory-modal');
+        const btnRestart = document.getElementById('btn-restart');
+        const btnCloseModal = document.getElementById('btn-close-modal');
+
+        // Maze grid parameters (9x9)
+        const gridCols = 9;
+        const gridRows = 9;
+        let cellSize = 0;
+
+        // Maze Grid representation (1 = Wall, 0 = Walkable Path)
+        const mazeGrid = [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 0, 1, 0, 1, 0, 1, 0, 1],
+            [1, 0, 1, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 1, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1]
+        ];
+
+        // Player & Goal Coordinates
+        let player = { x: 1, y: 1 };
+        const goal = { x: 7, y: 7 };
+        let gameWon = false;
+
+        // Auto-scale canvas responsively according to mobile screen width
+        function resizeCanvas() {
+            const containerWidth = canvas.parentElement.clientWidth - 20;
+            canvas.width = containerWidth;
+            canvas.height = containerWidth;
+            cellSize = canvas.width / gridCols;
+            draw();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Render Walls and Paths
+            for (let r = 0; r < gridRows; r++) {
+                for (let c = 0; c < gridCols; c++) {
+                    const x = c * cellSize;
+                    const y = r * cellSize;
+
+                    if (mazeGrid[r][c] === 1) {
+                        ctx.fillStyle = '#1e293b';
+                        ctx.fillRect(x, y, cellSize, cellSize);
+                        ctx.fillStyle = '#0f172a';
+                        ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+                    } else {
+                        ctx.fillStyle = '#020617';
+                        ctx.fillRect(x, y, cellSize, cellSize);
+                    }
+                }
+            }
+
+            // Render Goal Point 🚩
+            const goalX = goal.x * cellSize + cellSize / 2;
+            const goalY = goal.y * cellSize + cellSize / 2;
+
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.arc(goalX, goalY, cellSize * 0.35, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.font = `${cellSize * 0.55}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🚩', goalX, goalY);
+
+            // Render Player 🏃
+            const playerX = player.x * cellSize + cellSize / 2;
+            const playerY = player.y * cellSize + cellSize / 2;
+
+            ctx.font = `${cellSize * 0.65}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🏃', playerX, playerY);
+        }
+
+        function movePlayer(dx, dy) {
+            if (gameWon) return;
+
+            const newX = player.x + dx;
+            const newY = player.y + dy;
+
+            // Collision check with boundary and walls
+            if (
+                newX >= 0 && newX < gridCols &&
+                newY >= 0 && newY < gridRows &&
+                mazeGrid[newY][newX] === 0
+            ) {
+                player.x = newX;
+                player.y = newY;
+                draw();
+                checkWin();
+            }
+        }
+
+        // Trigger Fullscreen Victory Overlay
+        function checkWin() {
+            if (player.x === goal.x && player.y === goal.y) {
+                gameWon = true;
+
+                setTimeout(() => {
+                    modal.classList.remove('hidden');
+                    modal.classList.add('flex');
+
+                    // Fire celebratory confetti explosion
+                    if (typeof confetti === 'function') {
+                        confetti({
+                            particleCount: 100,
+                            spread: 80,
+                            origin: { y: 0.5 }
+                        });
+                    }
+                }, 120);
+            }
+        }
+
+        function restartGame() {
+            player = { x: 1, y: 1 };
+            gameWon = false;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            draw();
+        }
+
+        // Swipe Detection Setup for Mobile Touchscreens
+        let touchStartX = 0;
+        let touchStartY = 0;
+        const touchArea = document.getElementById('touch-area');
+
+        touchArea.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        touchArea.addEventListener('touchend', (e) => {
+            if (gameWon) return;
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+
+            const diffX = touchEndX - touchStartX;
+            const diffY = touchEndY - touchStartY;
+
+            // Minimum swipe threshold (pixels)
+            if (Math.abs(diffX) > 20 || Math.abs(diffY) > 20) {
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    movePlayer(diffX > 0 ? 1 : -1, 0);
+                } else {
+                    movePlayer(0, diffY > 0 ? 1 : -1);
+                }
+            }
+        }, { passive: true });
+
+        // D-Pad Button Click Listeners
+        document.getElementById('btn-up').addEventListener('click', () => movePlayer(0, -1));
+        document.getElementById('btn-down').addEventListener('click', () => movePlayer(0, 1));
+        document.getElementById('btn-left').addEventListener('click', () => movePlayer(-1, 0));
+        document.getElementById('btn-right').addEventListener('click', () => movePlayer(1, 0));
+
+        // Keyboard navigation for desktop testing
+        window.addEventListener('keydown', (e) => {
+            switch (e.key) {
+                case 'ArrowUp': case 'w': case 'W': movePlayer(0, -1); break;
+                case 'ArrowDown': case 's': case 'S': movePlayer(0, 1); break;
+                case 'ArrowLeft': case 'a': case 'A': movePlayer(-1, 0); break;
+                case 'ArrowRight': case 'd': case 'D': movePlayer(1, 0); break;
+            }
+        });
+
+        // Modal Action Buttons
+        btnRestart.addEventListener('click', restartGame);
+        btnCloseModal.addEventListener('click', () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        });
+
+        // Initialize Canvas on Load
+        window.onload = () => {
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+        };
+    </script>
+</body>
+</html>
